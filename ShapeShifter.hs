@@ -62,9 +62,6 @@ possibleStates state shape = [ GameState { modularity = modularity state
                                          } | i <- possibleIndices b shape 
                              ] where b = gameBoard state
                                      m = modularity state
--- possibleStates are made from every combination of dim values from 0 to board.length-shape.length
--- func: apply shape at index
--- applyShape = 
 
 shapeShifter :: GameState -> [GameShape] -> Maybe GamePlan
 shapeShifter state [] = if isSolved (gameBoard state) then Just ( GamePlan [] ) else Nothing
