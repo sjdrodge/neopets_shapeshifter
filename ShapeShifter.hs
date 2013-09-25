@@ -52,16 +52,20 @@ possibleIndices board shape = range (mn, mx)
                                     mn = (fst . bounds) board
                                     mx = f board - f shape
 
-applyShape :: Int -> GameBoard -> GameShape -> BoardIndex -> GameBoard
-applyShape m b s i = accum f b [ (i + j, s ! j) | j <- range (bounds s) ]
-                         where f x y = ( (x + y) `mod` m )
-
 possibleStates :: GameState -> GameShape -> [GameState]
 possibleStates state shape = [ GameState { modularity = modularity state
                                          , gameBoard = (applyShape m b shape i)
                                          } | i <- possibleIndices b shape 
                              ] where b = gameBoard state
                                      m = modularity state
+                                        
+
+isSolved :: GameBoard -> Bool
+isSolved = not . isJust . find (0/=) . elems
+
+applyShape :: Int -> GameBoard -> GameShape -> BoardIndex -> GameBoard
+applyShape m b s i = accum f b [ (i + j, s ! j) | j <- range (bounds s) ]
+                         where f x y = ( (x + y) `mod` m )
 
 shapeShifter :: GameState -> [GameShape] -> Maybe GamePlan
 shapeShifter state [] = if isSolved (gameBoard state) then Just ( GamePlan [] ) else Nothing
@@ -72,7 +76,3 @@ shapeShifter state (shape:shapes) = g . join . find isJust
                                         f i (Just p) = Just (i,p)
                                         g Nothing = Nothing
                                         g (Just (i, GamePlan p)) = Just ( GamePlan ((shape,i):p) )
-                                        
-
-isSolved :: GameBoard -> Bool
-isSolved = not . isJust . find (0/=) . elems
