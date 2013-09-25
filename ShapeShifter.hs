@@ -58,7 +58,6 @@ possibleStates state shape = [ GameState { modularity = modularity state
                                          } | i <- possibleIndices b shape 
                              ] where b = gameBoard state
                                      m = modularity state
-                                        
 
 isSolved :: GameBoard -> Bool
 isSolved = not . isJust . find (0/=) . elems
