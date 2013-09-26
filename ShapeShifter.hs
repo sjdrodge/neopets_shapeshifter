@@ -17,6 +17,7 @@ import Data.Array.IArray
 import Data.Data
 import Data.List
 import Data.Maybe
+import Data.Ord
 import Data.Typeable()
 import qualified Data.Aeson as J
 import qualified Data.Vector as V
@@ -107,9 +108,16 @@ applyShape :: Int -> GameBoard -> GameShape -> BoardIndex -> GameBoard
 applyShape m b s i = accum f b [ (i + j, s ! j) | j <- range (bounds s) ]
                          where f x y = ( (x + y) `mod` m )
 
+score :: GameState -> Int
+score (GameState m b shs)  = foldr f 0 (elems b)
+    where f x a = ((m - x) + a) `mod` m
+
+heuristic :: (GameState, BoardIndex) -> (GameState, BoardIndex) -> Ordering
+heuristic (st, i) (st', i') = (comparing score) st st'
+
 shapeShifter :: GameState -> Maybe GamePlan
 shapeShifter st | null (shapes st) = if isSolved (board st) then Just ( GamePlan (st,[]) ) else Nothing
-shapeShifter st = join . find isJust $ map f (possibleStates st)
+shapeShifter st = join . find isJust $ map f (sortBy heuristic (possibleStates st))
                                            where f (st', i) = do
                                                  GamePlan (_, ixs) <- shapeShifter st'
                                                  return $ GamePlan (st, (i:ixs))
