@@ -1,12 +1,12 @@
 import ShapeShifter
--- import System.Environment
+import System.Environment
 import qualified Data.Aeson as J
 import qualified Data.ByteString.Lazy.Char8 as B
 
 main :: IO ()
 main = do
-    -- (_:filepath:[]) <- getArgs
-    bstr <- B.readFile "tests/test3.JSON"
+    [filepath] <- getArgs
+    bstr <- B.readFile filepath
     mstr <- return (maybeSolve bstr)
     maybePutStr mstr
 
