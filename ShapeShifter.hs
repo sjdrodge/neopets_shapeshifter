@@ -1,28 +1,40 @@
+{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, TypeSynonymInstances, FlexibleInstances #-}
 module ShapeShifter ( GameBoard
                     , GameShape
                     , GameState(..)
                     , GamePlan(..)
                     , applyShape
+                    , ppGameBoard
+                    , ppGamePlan
+                    , ppGameState
                     , shapeShifter
                     ) where
 
+import Control.Applicative
 import Control.Monad
+import Data.Aeson((.=), (.:))
 import Data.Array.IArray
+import Data.Data
 import Data.List
 import Data.Maybe
+import Data.Typeable()
+import qualified Data.Aeson as J
+import qualified Data.Vector as V
 
 type GameBoard = Array BoardIndex Int
 
 type GameShape = GameBoard
 
 data GameState = GameState { modularity :: Int
-                           , gameBoard :: GameBoard
-                           }
+                           , board :: GameBoard
+                           , shapes :: [GameShape]
+                           } deriving (Data, Typeable, Show)
 
-data GamePlan = GamePlan [(GameShape, BoardIndex)]
+data GamePlan = GamePlan (GameState, [BoardIndex])
+    deriving (Data, Typeable, Show)
 
 newtype BoardIndex = BoardIndex (Int,Int)
-    deriving (Eq, Ord, Show, Ix)
+    deriving (Eq, Ord, Ix, Data, Typeable, Show)
 
 ppGameBoard :: GameBoard -> String
 ppGameBoard b = unlines ("":[ unwords [ show ( b ! BoardIndex (j, i) )
@@ -31,12 +43,13 @@ ppGameBoard b = unlines ("":[ unwords [ show ( b ! BoardIndex (j, i) )
                                 | j <- [0..((fst . f . snd . bounds) b)]
                             ]) where f (BoardIndex (x,y)) = (x,y)
 
-instance Show GameState where
-    show state = ppGameBoard b ++ "% " ++ show (modularity state)
-                                 where b = gameBoard state
+ppGamePlan :: GamePlan -> String
+ppGamePlan (GamePlan (st, ixs)) = ppGameState st ++ "\n" ++ (unwords $ map f $ zip (shapes st) ixs)
+    where f (sh, BoardIndex (n,m)) = ppGameBoard sh ++ "-\n" ++ show (n + 1, m + 1) ++ "\n"
 
-instance Show GamePlan where
-    show (GamePlan xs) = concatMap ( \(s,i) -> "(" ++ ppGameBoard s ++ ", " ++ show i ++ ")" ) xs
+ppGameState :: GameState -> String
+ppGameState st = ppGameBoard b ++ "% " ++ show (modularity st)
+                                where b = board st
 
 instance Num BoardIndex where
     (+) (BoardIndex (a, b)) (BoardIndex (c, d)) = BoardIndex (a+c, b+d)
@@ -46,18 +59,46 @@ instance Num BoardIndex where
     signum (BoardIndex (a, b)) = BoardIndex (signum a, signum b)
     fromInteger x = BoardIndex ( fromIntegral x, fromIntegral x)
 
-possibleIndices :: GameBoard -> GameShape -> [BoardIndex]
-possibleIndices board shape = range (mn, mx)
-                              where f = (snd . bounds)
-                                    mn = (fst . bounds) board
-                                    mx = f board - f shape
+instance J.ToJSON BoardIndex where
+    toJSON (BoardIndex (x,y)) = (J.Array . V.fromList . map (J.toJSON . (+1)) ) [x,y]
 
-possibleStates :: GameState -> GameShape -> [GameState]
-possibleStates state shape = [ GameState { modularity = modularity state
-                                         , gameBoard = (applyShape m b shape i)
-                                         } | i <- possibleIndices b shape 
-                             ] where b = gameBoard state
-                                     m = modularity state
+instance J.ToJSON GameBoard where
+    toJSON b = J.object [ "dimensions" .= (snd . bounds) b
+                        , "data" .= (J.Array . V.fromList . map J.toJSON . elems) b
+                        ]
+
+instance J.FromJSON GameBoard where
+    parseJSON (J.Object b) = listArray
+                             <$> ( listToBoardIndexRange <$> b .: "dimensions" )
+                             <*> ( V.toList <$> b .: "data" )
+
+instance J.ToJSON GameState where
+    toJSON (GameState { modularity = m, board = b, shapes = shs }) = J.object [ "modularity" .= m
+                                                                              , "board" .= b
+                                                                              , "shapes" .= shs
+                                                                              ]
+
+instance J.FromJSON GameState where
+    parseJSON (J.Object b) = GameState
+                             <$> b .: "modularity"
+                             <*> b .: "board"
+                             <*> ( V.toList <$> b .: "shapes" )
+
+listToBoardIndexRange :: [Int] -> (BoardIndex, BoardIndex)
+listToBoardIndexRange (x:y:[]) = (BoardIndex (0, 0), BoardIndex (x-1, y-1))
+
+possibleIndices :: GameBoard -> GameShape -> [BoardIndex]
+possibleIndices b sh = range (mn, mx)
+                              where f = (snd . bounds)
+                                    mn = (fst . bounds) b
+                                    mx = f b - f sh
+
+-- Warning: partial function (fails when shapes is empty) 
+possibleStates :: GameState -> [(GameState, BoardIndex)]
+possibleStates (GameState { modularity = m, board = b, shapes = (sh:shs) }) = do
+    i <- possibleIndices b sh
+    nb <- return (applyShape m b sh i)
+    return (GameState { modularity = m, board = nb, shapes = shs }, i)
 
 isSolved :: GameBoard -> Bool
 isSolved = not . isJust . find (0/=) . elems
@@ -66,12 +107,9 @@ applyShape :: Int -> GameBoard -> GameShape -> BoardIndex -> GameBoard
 applyShape m b s i = accum f b [ (i + j, s ! j) | j <- range (bounds s) ]
                          where f x y = ( (x + y) `mod` m )
 
-shapeShifter :: GameState -> [GameShape] -> Maybe GamePlan
-shapeShifter state [] = if isSolved (gameBoard state) then Just ( GamePlan [] ) else Nothing
-shapeShifter state (shape:shapes) = g . join . find isJust
-                                  $ zipWith f (possibleIndices (gameBoard state) shape)
-                                  $ map (`shapeShifter` shapes) (possibleStates state shape)
-                                  where f _ Nothing = Nothing
-                                        f i (Just p) = Just (i,p)
-                                        g Nothing = Nothing
-                                        g (Just (i, GamePlan p)) = Just ( GamePlan ((shape,i):p) )
+shapeShifter :: GameState -> Maybe GamePlan
+shapeShifter st | null (shapes st) = if isSolved (board st) then Just ( GamePlan (st,[]) ) else Nothing
+shapeShifter st = join . find isJust $ map f (possibleStates st)
+                                           where f (st', i) = do
+                                                 GamePlan (_, ixs) <- shapeShifter st'
+                                                 return $ GamePlan (st, (i:ixs))

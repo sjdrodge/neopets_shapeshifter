@@ -1,0 +1,18 @@
+{ "modularity" : 2
+, "board" : { "dimensions" : [4,3]
+            , "data" : [1,1,0,0,1,0,1,0,1,1,0,1]
+            }
+, "shapes" : [ { "dimensions" : [3,3], "data" : [1,1,1,1,0,1,1,1,1] }
+             , { "dimensions" : [3,3], "data" : [1,1,1,1,0,1,1,1,1] }
+             , { "dimensions" : [1,1], "data" : [1] }
+             , { "dimensions" : [1,3], "data" : [1,1,1] }
+             , { "dimensions" : [2,1], "data" : [1,1] }
+             , { "dimensions" : [3,2], "data" : [1,0,1,1,0,1] }
+             , { "dimensions" : [1,1], "data" : [1] }
+             , { "dimensions" : [3,2], "data" : [1,0,1,1,1,0] }
+             , { "dimensions" : [2,1], "data" : [1,1] }
+             , { "dimensions" : [3,2], "data" : [1,1,1,1,1,1] }
+             , { "dimensions" : [1,1], "data" : [1] }
+             , { "dimensions" : [2,3], "data" : [0,1,1,1,1,1] }
+             ]
+}
