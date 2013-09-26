@@ -109,11 +109,11 @@ applyShape m b s i = accum f b [ (i + j, s ! j) | j <- range (bounds s) ]
                          where f x y = ( (x + y) `mod` m )
 
 score :: GameState -> Int
-score (GameState m b shs)  = foldr f 0 (elems b)
-    where f x a = ((m - x) + a) `mod` m
+score (GameState m b _)  = foldr f 0 (elems b)
+    where f x a = ((m - x) `mod` m) + a
 
 heuristic :: (GameState, BoardIndex) -> (GameState, BoardIndex) -> Ordering
-heuristic (st, i) (st', i') = (comparing score) st st'
+heuristic (st, _) (st', _) = (comparing score) st st'
 
 shapeShifter :: GameState -> Maybe GamePlan
 shapeShifter st | null (shapes st) = if isSolved (board st) then Just ( GamePlan (st,[]) ) else Nothing
