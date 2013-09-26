@@ -8,8 +8,8 @@ GameState.board = { dimensions : [], data : [] };
 GameState.shapes = [];
 
 Scraper.getBoard = function () {
-  var rows = $( ".content > table tr" ).length;
-  var cells = $( ".content > table a" ).length;
+  var rows = $( ".content > table a img" ).closest("tr").length;
+  var cells = $( ".content > table a img" ).length;
   GameState.board.dimensions = [rows, cells/rows];
   $( ".content > table a img" ).each( function(index, Element) {
     var reg = /[^\/]*_/;
