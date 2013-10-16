@@ -108,16 +108,22 @@ applyShape :: Int -> GameBoard -> GameShape -> BoardIndex -> GameBoard
 applyShape m b s i = accum f b [ (i + j, s ! j) | j <- range (bounds s) ]
                          where f x y = ( (x + y) `mod` m )
 
-score :: GameState -> Int
-score (GameState m b _)  = foldr f 0 (elems b)
+mass :: GameShape -> Int
+mass = sum . elems
+
+distance :: GameState -> Int
+distance (GameState m b _)  = foldr f 0 (elems b)
     where f x a = ((m - x) `mod` m) + a
 
 heuristic :: (GameState, BoardIndex) -> (GameState, BoardIndex) -> Ordering
-heuristic (st, _) (st', _) = (comparing score) st st'
+heuristic (st, _) (st', _) = (comparing distance) st st'
+
+prunePred :: (GameState, BoardIndex) -> Bool
+prunePred (st@(GameState _ _ shs), _) = (sum . map mass) shs >= distance st
 
 shapeShifter :: GameState -> Maybe GamePlan
 shapeShifter st | null (shapes st) = if isSolved (board st) then Just ( GamePlan (st,[]) ) else Nothing
-shapeShifter st = join . find isJust $ map f (sortBy heuristic (possibleStates st))
+shapeShifter st = join . find isJust . map f . sortBy heuristic . filter prunePred . possibleStates $ st
                                            where f (st', i) = do
                                                  GamePlan (_, ixs) <- shapeShifter st'
                                                  return $ GamePlan (st, (i:ixs))
