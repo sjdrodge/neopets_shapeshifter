@@ -39,8 +39,8 @@ newtype BoardIndex = BoardIndex (Int,Int)
 
 ppGameBoard :: GameBoard -> String
 ppGameBoard b = unlines ("":[ unwords [ show ( b ! BoardIndex (j, i) )
-                                | i <- [0..((snd . f . snd . bounds) b)] 
-                                ] 
+                                | i <- [0..((snd . f . snd . bounds) b)]
+                                ]
                                 | j <- [0..((fst . f . snd . bounds) b)]
                             ]) where f (BoardIndex (x,y)) = (x,y)
 
@@ -94,7 +94,7 @@ possibleIndices b sh = range (mn, mx)
                                     mn = (fst . bounds) b
                                     mx = f b - f sh
 
--- Warning: partial function (fails when shapes is empty) 
+-- Warning: partial function (fails when shapes is empty)
 possibleStates :: GameState -> [(GameState, BoardIndex)]
 possibleStates (GameState { modularity = m, board = b, shapes = (sh:shs) }) = do
     i <- possibleIndices b sh
