@@ -7,7 +7,7 @@ module ShapeShifter ( GameBoard
                     , ppGameBoard
                     , ppGamePlan
                     , ppGameState
-                    , shapeShifter
+                    , solve
                     ) where
 
 import Control.Applicative
@@ -127,3 +127,8 @@ shapeShifter st = join . find isJust . map f . sortBy heuristic . filter prunePr
                                            where f (st', i) = do
                                                  GamePlan (_, ixs) <- shapeShifter st'
                                                  return $ GamePlan (st, (i:ixs))
+
+solve :: GameState -> Maybe GamePlan
+solve st = shapeShifter st{ shapes = sortBy f (shapes st) }
+    where f x y = compare (g y) (g x)
+          g = snd . bounds

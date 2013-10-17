@@ -17,5 +17,5 @@ maybePutStr (Just str) = putStr str
 maybeSolve :: B.ByteString -> Maybe String
 maybeSolve str = do
     st <- J.decode str :: Maybe GameState
-    p <- shapeShifter st
+    p <- solve st
     return (ppGamePlan p)
