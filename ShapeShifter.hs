@@ -115,15 +115,15 @@ distance :: GameState -> Int
 distance (GameState m b _)  = foldr f 0 (elems b)
     where f x a = ((m - x) `mod` m) + a
 
+distanceFromMass :: (GameState, BoardIndex) -> Int
+distanceFromMass (st, _) = (sum . map mass . shapes) st - distance st
+
 heuristic :: (GameState, BoardIndex) -> (GameState, BoardIndex) -> Ordering
 heuristic (st, _) (st', _) = (comparing distance) st st'
 
-prunePred :: (GameState, BoardIndex) -> Bool
-prunePred (st@(GameState _ _ shs), _) = (sum . map mass) shs >= distance st
-
 shapeShifter :: GameState -> Maybe GamePlan
 shapeShifter st | null (shapes st) = if isSolved (board st) then Just ( GamePlan (st,[]) ) else Nothing
-shapeShifter st = join . find isJust . map f . sortBy heuristic . filter prunePred . possibleStates $ st
+shapeShifter st = join . find isJust . map f . sortBy heuristic . filter ((0<=) . distanceFromMass) . possibleStates $ st
                                            where f (st', i) = do
                                                  GamePlan (_, ixs) <- shapeShifter st'
                                                  return $ GamePlan (st, (i:ixs))
