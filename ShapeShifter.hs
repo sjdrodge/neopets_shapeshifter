@@ -118,12 +118,9 @@ distance (GameState m b _)  = foldr f 0 (elems b)
 distanceFromMass :: (GameState, BoardIndex) -> Int
 distanceFromMass (st, _) = (sum . map mass . shapes) st - distance st
 
-heuristic :: (GameState, BoardIndex) -> (GameState, BoardIndex) -> Ordering
-heuristic (st, _) (st', _) = (comparing distance) st st'
-
 shapeShifter :: GameState -> Maybe GamePlan
 shapeShifter st | null (shapes st) = if isSolved (board st) then Just ( GamePlan (st,[]) ) else Nothing
-shapeShifter st = join . find isJust . map f . sortBy heuristic . filter ((0<=) . distanceFromMass) . possibleStates $ st
+shapeShifter st = join . find isJust . map f . sortBy (comparing distanceFromMass) . filter ((0<=) . distanceFromMass) . possibleStates $ st
                                            where f (st', i) = do
                                                  GamePlan (_, ixs) <- shapeShifter st'
                                                  return $ GamePlan (st, (i:ixs))
