@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DeriveDataTypeable, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings, TypeSynonymInstances, FlexibleInstances #-}
 module ShapeShifter ( GameBoard
                     , GameShape
                     , GameState(..)
@@ -13,11 +13,9 @@ import Control.Applicative
 import Control.Monad
 import Data.Aeson((.=), (.:))
 import Data.Array.IArray
-import Data.Data
 import Data.List
 import Data.Maybe
 import Data.Ord
-import Data.Typeable()
 import qualified Data.Aeson as J
 import qualified Data.Vector as V
 
@@ -30,14 +28,14 @@ type Modularity = Int
 data GameState = GameState { modularity :: Modularity
                            , board :: GameBoard
                            , shapes :: [GameShape]
-                           } deriving (Data, Typeable, Show)
+                           } deriving (Show)
 
 data GamePlan = GamePlan { gboard :: GameBoard
                          , shapesToLocs :: [(GameShape, BoardIndex)]
-                         } deriving (Data, Typeable, Show)
+                         } deriving (Show)
 
 newtype BoardIndex = BoardIndex (Int,Int)
-    deriving (Eq, Ord, Ix, Data, Typeable, Show)
+    deriving (Eq, Ord, Ix, Show)
 
 ppGameBoard :: GameBoard -> String
 ppGameBoard b = unlines ("":[ unwords [ show ( b ! BoardIndex (j, i) )
