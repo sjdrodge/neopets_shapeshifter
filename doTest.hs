@@ -1,5 +1,6 @@
 import ShapeShifter
 import System.Environment
+import Control.Monad
 import qualified Data.Aeson as J
 import qualified Data.ByteString.Lazy.Char8 as B
 
@@ -7,15 +8,13 @@ main :: IO ()
 main = do
     [filepath] <- getArgs
     bstr <- B.readFile filepath
-    mstr <- return (maybeSolve bstr)
-    maybePutStr mstr
+    let st = getGameState bstr
+    maybePutStr . liftM ( ("flips: "++) . (++"\n") . show . flips ) $ st
+    maybePutStr . liftM ppGamePlan $ solve =<< st
 
 maybePutStr :: Maybe String -> IO ()
-maybePutStr Nothing = putStr ""
+maybePutStr Nothing = putStr "No solution found."
 maybePutStr (Just str) = putStr str
 
-maybeSolve :: B.ByteString -> Maybe String
-maybeSolve str = do
-    st <- J.decode str :: Maybe GameState
-    p <- solve st
-    return (ppGamePlan p)
+getGameState :: B.ByteString -> Maybe GameState
+getGameState = J.decode

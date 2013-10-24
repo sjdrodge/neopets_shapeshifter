@@ -7,6 +7,7 @@ module ShapeShifter ( GameBoard
                     , ppGamePlan
                     , ppGameState
                     , solve
+                    , flips
                     ) where
 
 import Control.Applicative
@@ -129,3 +130,6 @@ solve :: GameState -> Maybe GamePlan
 solve st = shapeShifter (modularity st) (board st) . sortBy f . sortBy g $ (shapes st)
     where f x y = comparing (snd . bounds) y x --larger first
           g x y = comparing mass y x --larger first
+
+flips :: GameState -> Int
+flips st = ( (sum . map mass . shapes) st - distance (modularity st) (board st) ) `div` ( modularity st )
