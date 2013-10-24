@@ -127,5 +127,5 @@ shapeShifter m b (s:ss) = join . find isJust . map f . sortBy (comparing g) . fi
 
 solve :: GameState -> Maybe GamePlan
 solve st = shapeShifter (modularity st) (board st) $ sortBy f (shapes st)
-    where f x y = compare (g y) (g x)
-          g = snd . bounds
+    where f x y = if g x y /= EQ then g x y else comparing mass y x --larger first
+          g x y = comparing (snd . bounds) y x --larger first
