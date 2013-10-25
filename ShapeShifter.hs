@@ -1,8 +1,8 @@
-{-# LANGUAGE OverloadedStrings, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings, TypeSynonymInstances, FlexibleInstances, GeneralizedNewtypeDeriving #-}
 module ShapeShifter ( GameBoard
                     , GameShape
                     , GameState(..)
-                    , GamePlan(..)
+                    , GamePlan
                     , ppGameBoard
                     , ppGamePlan
                     , ppGameState
@@ -12,7 +12,8 @@ module ShapeShifter ( GameBoard
 
 import Control.Applicative
 import Control.Monad
-import Data.Aeson((.=), (.:))
+import Control.Parallel.Strategies
+import Data.Aeson ((.=), (.:))
 import Data.Array.IArray
 import Data.List
 import Data.Maybe
@@ -31,12 +32,10 @@ data GameState = GameState { modularity :: Modularity
                            , shapes :: [GameShape]
                            } deriving (Show)
 
-data GamePlan = GamePlan { gboard :: GameBoard
-                         , shapesToLocs :: [(GameShape, BoardIndex)]
-                         } deriving (Show)
+type GamePlan = [(GameShape, BoardIndex)]
 
 newtype BoardIndex = BoardIndex (Int,Int)
-    deriving (Eq, Ord, Ix, Show)
+    deriving (Eq, Ord, Ix, Show, NFData)
 
 ppGameBoard :: GameBoard -> String
 ppGameBoard b = unlines ("":[ unwords [ show ( b ! BoardIndex (j, i) )
@@ -46,7 +45,7 @@ ppGameBoard b = unlines ("":[ unwords [ show ( b ! BoardIndex (j, i) )
                             ]) where f (BoardIndex (x,y)) = (x,y)
 
 ppGamePlan :: GamePlan -> String
-ppGamePlan (GamePlan {gboard = b, shapesToLocs = stl}) = ppGameBoard b ++ "----\n" ++ (unwords . map f $ stl)
+ppGamePlan = unwords . map f
     where f (sh, BoardIndex (n,m)) = ppGameBoard sh ++ "-\n" ++ show (n + 1, m + 1) ++ "\n"
 
 ppGameState :: GameState -> String
@@ -99,11 +98,11 @@ applyShape :: Modularity -> GameBoard -> GameShape -> BoardIndex -> GameBoard
 applyShape m b s i = accum f b [ (i + j, s ! j) | j <- range (bounds s) ]
                          where f x y = ( (x + y) `mod` m )
 
-possiblePlans :: Modularity -> GameBoard -> GameShape -> [GamePlan]
+possiblePlans :: Modularity -> GameBoard -> GameShape -> [(BoardIndex, GameBoard)]
 possiblePlans m b s = do
     i <- possibleIndices b s
     let b' = (applyShape m b s i)
-    return $ GamePlan {gboard = b', shapesToLocs = [(s,i)]}
+    return $ (i, b')
 
 isSolved :: GameBoard -> Bool
 isSolved = not . isJust . find (0/=) . elems
@@ -118,16 +117,22 @@ distance m b  = foldr f 0 (elems b)
 distanceFromMass :: Modularity -> GameBoard -> [GameShape] -> Int
 distanceFromMass m b xs = (sum . map mass ) xs - distance m b
 
-shapeShifter :: Modularity -> GameBoard -> [GameShape] -> Maybe GamePlan
-shapeShifter _ b ss | null ss = if isSolved b then Just ( GamePlan {gboard = b, shapesToLocs = []} ) else Nothing
-shapeShifter m b (s:ss) = join . find isJust . map f . sortBy (comparing g) . filter ((0<=) . g) . possiblePlans m b $ s
-                                           where g (GamePlan {gboard = b'}) = distanceFromMass m b' ss
-                                                 f (GamePlan {gboard = b', shapesToLocs = [stl']}) = do
-                                                    (GamePlan {shapesToLocs = stl}) <- shapeShifter m b' ss
-                                                    return $ GamePlan { gboard = b, shapesToLocs = stl':stl}
+pruneAndSort :: Modularity -> [GameShape] -> [(BoardIndex, GameBoard)] -> [(BoardIndex, GameBoard)]
+pruneAndSort m ss = sortBy (comparing h) . filter ((0<=) . h)
+    where h (_, b) = distanceFromMass m b ss
+
+shapeShifter' :: Int -> Modularity -> [GameShape] -> (BoardIndex, GameBoard) -> Maybe GamePlan
+shapeShifter' c m (s:ss) (i, b) = do
+    ret <- shapeShifter c m b ss
+    return $ (s, i) : ret
+
+shapeShifter :: Int -> Modularity -> GameBoard -> [GameShape] -> Maybe GamePlan
+shapeShifter _ _ b ss | null ss = if isSolved b then Just [] else Nothing
+shapeShifter 0 m b (s:ss) = msum . map (shapeShifter' 0 m (s:ss)) . pruneAndSort m ss . possiblePlans m b $ s
+shapeShifter c m b (s:ss) = msum . withStrategy (parListN 2 rdeepseq) . map (shapeShifter' (c-1) m (s:ss)) . pruneAndSort m ss . possiblePlans m b $ s
 
 solve :: GameState -> Maybe GamePlan
-solve st = shapeShifter (modularity st) (board st) . sortBy f . sortBy g $ (shapes st)
+solve st = shapeShifter 5 (modularity st) (board st) . sortBy f . sortBy g $ (shapes st)
     where f x y = comparing (snd . bounds) y x --larger first
           g x y = comparing mass y x --larger first
 
