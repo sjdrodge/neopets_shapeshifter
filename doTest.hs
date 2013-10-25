@@ -7,12 +7,13 @@ main :: IO ()
 main = do
     [filepath] <- getArgs
     bstr <- B.readFile filepath
-    let st = getGameState bstr
+    let st = maybe (error "Error - Malformed JSON.") id $ getGameState bstr
+    if checksum st /= 0 then error "Unsolvable puzzle - checksum failed." else return ()
     putStrLn $ showFlips st
-    putStr $ showPlan (solve =<< st)
+    putStr $ showPlan (solve st)
 
-showFlips :: Maybe GameState -> String
-showFlips = maybe "Malformed JSON." (("flips: "++) . show . flips )
+showFlips :: GameState -> String
+showFlips = ("flips: "++) . show . flips
 
 showPlan :: Maybe GamePlan -> String
 showPlan = maybe "No solution found." ppGamePlan

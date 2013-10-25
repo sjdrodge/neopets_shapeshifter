@@ -8,6 +8,7 @@ module ShapeShifter ( GameBoard
                     , ppGameState
                     , solve
                     , flips
+                    , checksum
                     ) where
 
 import Control.Applicative
@@ -138,3 +139,6 @@ solve st = shapeShifter 5 (modularity st) (board st) . sortBy f . sortBy g $ (sh
 
 flips :: GameState -> Int
 flips st = ( (sum . map mass . shapes) st - distance (modularity st) (board st) ) `div` ( modularity st )
+
+checksum :: GameState -> Int
+checksum st = ( (sum . map mass . shapes) st - distance (modularity st) (board st) ) `mod` ( modularity st )
