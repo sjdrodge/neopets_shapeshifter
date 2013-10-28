@@ -129,11 +129,11 @@ shapeShifter' c m (s:ss) (i, b) = do
 
 shapeShifter :: Int -> Modularity -> GameBoard -> [GameShape] -> Maybe GamePlan
 shapeShifter _ _ b ss | null ss = if isSolved b then Just [] else Nothing
-shapeShifter 0 m b (s:ss) = msum . map (shapeShifter' 0 m (s:ss)) . pruneAndSort m ss . possiblePlans m b $ s
-shapeShifter c m b (s:ss) = msum . withStrategy (parListN 2 rdeepseq) . map (shapeShifter' (c-1) m (s:ss)) . pruneAndSort m ss . possiblePlans m b $ s
+shapeShifter 0 m b (s:ss) = msum . withStrategy (parList rdeepseq) . map (shapeShifter' (-1) m (s:ss)) . pruneAndSort m ss . possiblePlans m b $ s
+shapeShifter c m b (s:ss) = msum . map (shapeShifter' (c-1) m (s:ss)) . pruneAndSort m ss . possiblePlans m b $ s
 
-solve :: GameState -> Maybe GamePlan
-solve st = shapeShifter 5 (modularity st) (board st) . sortBy f . sortBy g $ (shapes st)
+solve :: Int -> GameState -> Maybe GamePlan
+solve depth st = shapeShifter (length (shapes st) - depth) (modularity st) (board st) . sortBy f . sortBy g $ (shapes st)
     where f x y = comparing (snd . bounds) y x --larger first
           g x y = comparing mass y x --larger first
 
