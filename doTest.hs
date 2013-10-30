@@ -5,13 +5,12 @@ import qualified Data.ByteString.Lazy.Char8 as B
 
 main :: IO ()
 main = do
-    [depthstr, filepath] <- getArgs
-    let depth = read depthstr
+    [filepath] <- getArgs
     bstr <- B.readFile filepath
     let st = maybe (error "Error - Malformed JSON.") id $ getGameState bstr
     if checksum st /= 0 then error "Unsolvable puzzle - checksum failed." else return ()
     printStats st
-    putStr $ showPlan (solve depth st)
+    putStr $ showPlan (solve st)
 
 printStats :: GameState -> IO ()
 printStats st = do
