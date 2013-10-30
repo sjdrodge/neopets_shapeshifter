@@ -133,8 +133,10 @@ shapeShifter m b (s:ss) = msum . map (shapeShifter' m (s:ss)) . pruneAndSort m s
 
 solve :: GameState -> Maybe GamePlan
 solve st = shapeShifter (modularity st) (board st) . sortBy f . sortBy g $ (shapes st)
-    where f x y = comparing (snd . bounds) y x --larger first
-          g x y = comparing mass y x --larger first
+    where f x y = comparing mass y x --larger first
+          g = comparing (h . snd . bounds)
+          h (BoardIndex (r, c)) = (rmax - r + 1) * (cmax - c + 1)
+          BoardIndex (rmax, cmax) = snd . bounds . board $ st
 
 flips :: GameState -> Int
 flips st = ( (sum . map mass . shapes) st - distance (modularity st) (board st) ) `div` ( modularity st )
