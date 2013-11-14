@@ -97,7 +97,7 @@ possibleIndices b sh = range (mn, mx)
 
 applyShape :: Modularity -> GameBoard -> GameShape -> BoardIndex -> GameBoard
 applyShape m b s i = accum f b [ (i + j, s ! j) | j <- range (bounds s) ]
-                         where f x y = (x + y) `mod` m
+                         where f x y = (x + y) `rem` m
 
 possiblePlans :: Modularity -> GameBoard -> GameShape -> [(BoardIndex, GameBoard)]
 possiblePlans m b s = do
@@ -113,7 +113,7 @@ mass = sum . elems
 
 distance :: Modularity -> GameBoard -> Int
 distance m b  = foldr f 0 (elems b)
-    where f x z = ((m - x) `mod` m) + z
+    where f x z = ((m - x) `rem` m) + z
 
 distanceFromMass :: Modularity -> GameBoard -> [GameShape] -> Int
 distanceFromMass m b xs = (sum . map mass ) xs - distance m b
@@ -138,8 +138,12 @@ solve st = shapeShifter (modularity st) (board st) . sortBy g . sortBy f $ shape
           h (BoardIndex (r, c)) = (rmax - r + 1) * (cmax - c + 1)
           BoardIndex (rmax, cmax) = snd . bounds . board $ st
 
+flipsAndChecksum :: GameState -> (Int, Int)
+flipsAndChecksum st = ( (sum . map mass . shapes) st - distance (modularity st) (board st) )
+                      `quotRem` modularity st
+
 flips :: GameState -> Int
-flips st = ( (sum . map mass . shapes) st - distance (modularity st) (board st) ) `div` modularity st
+flips = fst . flipsAndChecksum
 
 checksum :: GameState -> Int
-checksum st = ( (sum . map mass . shapes) st - distance (modularity st) (board st) ) `mod` modularity st
+checksum = snd . flipsAndChecksum
