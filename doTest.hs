@@ -1,3 +1,5 @@
+import Control.Monad
+import Data.Maybe
 import ShapeShifter
 import System.Environment
 import qualified Data.Aeson as J
@@ -7,8 +9,8 @@ main :: IO ()
 main = do
     [filepath] <- getArgs
     bstr <- B.readFile filepath
-    let st = maybe (error "Error - Malformed JSON.") id $ getGameState bstr
-    if checksum st /= 0 then error "Unsolvable puzzle - checksum failed." else return ()
+    let st = fromMaybe (error "Error - Malformed JSON.") $ getGameState bstr
+    when (checksum st /= 0) $ error "Unsolvable puzzle - checksum failed."
     printStats st
     putStr $ showPlan (solve st)
 
