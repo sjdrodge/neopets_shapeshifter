@@ -108,7 +108,8 @@ shapeIndicesList b s i = do
     r <- [0 .. (numRows s - 1)]
     c <- [0 .. (numCols s - 1)]
     let (r0, c0) = i
-    return ( numCols b * (r0 + r) + (c0 + c), rcIndex s r c )
+    guard ( rcIndex s r c == 1 )
+    return ( numCols b * (r0 + r) + (c0 + c), 1 )
 
 possibleIndices :: GameBoard -> GameShape -> [BoardIndex]
 possibleIndices b sh = do
