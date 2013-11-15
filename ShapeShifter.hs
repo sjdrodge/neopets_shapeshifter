@@ -40,11 +40,41 @@ data GameState = GameState { modularity :: Modularity
 
 type GamePlan = [(GameShape, BoardIndex)]
 
+type Delta = U.Vector (BoardOffset, BoardEntry)
+
+data GameShape_ = GameShape_ { sDims   :: BoardIndex
+                             , sMass   :: Int
+                             , sDeltas :: [(BoardIndex, Delta)]
+                             } deriving (Eq)
+
+data GameBoard_ = GameBoard_ { bDims :: BoardIndex
+                             , bDist :: Int
+                             , bData :: U.Vector BoardEntry
+                             , bMod  :: Modularity
+                             }
+
+type GamePlan_ = [(GameShape_, BoardIndex)]
+
 instance FromJSON GameBoard where
     parseJSON = genericParseJSON defaultOptions
         { fieldLabelModifier = \str -> subRegex (mkRegex "^boardD") str "d" }
 
 instance FromJSON GameState
+
+mkGameShapes_ :: GameState -> [GameShape_]
+mkGameShapes_ st = map (\ sh -> GameShape_ { sDims   = dimensions sh
+                                           , sMass   = mass sh
+                                           , sDeltas = map (flip (,) =<< (U.fromList . shapeIndicesList (board st) sh))
+                                                           (possibleIndices (board st) sh)
+                                           }
+                       ) (shapes st)
+
+mkGameBoard_ :: GameState -> GameBoard_
+mkGameBoard_ st = GameBoard_ { bDims = dimensions (board st)
+                             , bDist = distance (modularity st) (board st)
+                             , bData = boardData (board st)
+                             , bMod  = modularity st
+                             }
 
 rcIndex :: GameBoard -> Int -> Int -> BoardEntry
 rcIndex b r c = boardData b U.! (numCols b * r + c)
@@ -73,63 +103,68 @@ numCols = snd . dimensions
 boardSize :: GameBoard -> BoardIndex
 boardSize b = (numRows b, numCols b)
 
+shapeIndicesList :: GameBoard -> GameShape -> BoardIndex -> [(BoardOffset, BoardEntry)]
+shapeIndicesList b s i = do
+    r <- [0 .. (numRows s - 1)]
+    c <- [0 .. (numCols s - 1)]
+    let (r0, c0) = i
+    return ( numCols b * (r0 + r) + (c0 + c), rcIndex s r c )
+
 possibleIndices :: GameBoard -> GameShape -> [BoardIndex]
 possibleIndices b sh = do
     r <- [0 .. (numRows b - numRows sh)]
     c <- [0 .. (numCols b - numCols sh)]
     return (r, c)
 
-applyShape :: Modularity -> GameBoard -> GameShape -> BoardIndex -> GameBoard
-applyShape m b s i = b {boardData = U.accum f (boardData b) (shapeIndicesList b s i)}
-                         where f x y   = (x + y) `rem` m
+applyDelta :: Modularity -> GameBoard_ -> Delta -> GameBoard_
+applyDelta m b d = b { bDist = bDist b + distDelta
+                     , bData = bData'
+                     } where f x y     = (x + y) `rem` m
+                             bData'    = U.accumulate f (bData b) d
+                             distDelta = U.foldr (\(i,_) z -> (bData' U.! i) - (bData b U.! i) + z) 0 d
 
-
-shapeIndicesList :: GameBoard -> GameShape -> BoardIndex -> [(BoardOffset, BoardEntry)]
-shapeIndicesList b s i = do
-    r <- [0 .. (numRows s - 1)]
-    c <- [0 .. (numCols s - 1)]
-    let (r0, c0) = i
-    guard (rcIndex s r c == 1)
-    return ( numCols b * (r0 + r) + (c0 + c), 1 )
-
-possiblePlans :: Modularity -> GameBoard -> GameShape -> [(BoardIndex, GameBoard)]
+possiblePlans :: Modularity -> GameBoard_ -> GameShape_ -> [(BoardIndex, GameBoard_)]
 possiblePlans m b s = do
-    i <- possibleIndices b s
-    let b' = applyShape m b s i
+    (i, d) <- sDeltas s
+    let b' = applyDelta m b d
     return (i, b')
-
-isSolved :: GameBoard -> Bool
-isSolved = U.all (0==) . boardData
 
 mass :: GameShape -> Int
 mass = U.sum . boardData
 
 distance :: Modularity -> GameBoard -> Int
-distance m = U.foldr f 0 . boardData
-    where f x z = ((m - x) `rem` m) + z
+distance m = U.sum . U.map f . boardData
+    where f x = (m - x) `rem` m
 
-distanceFromMass :: Modularity -> GameBoard -> [GameShape] -> Int
-distanceFromMass m b xs = (sum . map mass ) xs - distance m b
+distanceFromMass :: Modularity -> GameBoard_ -> [GameShape_] -> Int
+distanceFromMass _ b xs = (sum . map sMass ) xs - bDist b
 
-pruneAndSort :: Modularity -> [GameShape] -> [(BoardIndex, GameBoard)] -> [(BoardIndex, GameBoard)]
+pruneAndSort :: Modularity -> [GameShape_] -> [(BoardIndex, GameBoard_)] -> [(BoardIndex, GameBoard_)]
 pruneAndSort m ss = sortBy (comparing h) . filter ((0<=) . h)
     where h (_, b) = distanceFromMass m b ss
 
-shapeShifter' :: Modularity -> [GameShape] -> (BoardIndex, GameBoard) -> Maybe GamePlan
+shapeShifter' :: Modularity -> [GameShape_] -> (BoardIndex, GameBoard_) -> Maybe GamePlan_
 shapeShifter' m (s:ss) (i, b) = do
     ret <- shapeShifter m b ss
     return $ (s, i) : ret
 
-shapeShifter :: Modularity -> GameBoard -> [GameShape] -> Maybe GamePlan
-shapeShifter _ b ss | null ss = if isSolved b then Just [] else Nothing
+shapeShifter :: Modularity -> GameBoard_ -> [GameShape_] -> Maybe GamePlan_
+shapeShifter _ b ss | null ss = if bDist b == 0 then Just [] else Nothing
 shapeShifter m b (s:ss) = msum . map (shapeShifter' m (s:ss)) . pruneAndSort m ss . possiblePlans m b $ s
 
-solve :: GameState -> Maybe GamePlan
-solve st = shapeShifter (modularity st) (board st) . sortBy g . sortBy f $ shapes st
-    where f x y = comparing mass y x --larger first
-          g = comparing (h . boardSize)
+solve' :: GameState -> Maybe GamePlan_
+solve' st = shapeShifter (modularity st) (mkGameBoard_ st) . sortBy g . sortBy f $ mkGameShapes_ st
+    where f x y = comparing sMass y x --larger first
+          g = comparing (h . sDims)
           h (r, c) = (rmax - r + 1) * (cmax - c + 1)
           (rmax, cmax) = boardSize . board $ st
+
+solve :: GameState -> Maybe GamePlan
+solve st = do
+    (shs, ixs) <- liftM unzip (solve' st)
+    let shapeTable = zip (mkGameShapes_ st) (shapes st)
+    shs' <- mapM (`lookup` shapeTable) shs
+    return $ zip shs' ixs
 
 flipsAndChecksum :: GameState -> (Int, Int)
 flipsAndChecksum st = ( (sum . map mass . shapes) st - distance (modularity st) (board st) )
