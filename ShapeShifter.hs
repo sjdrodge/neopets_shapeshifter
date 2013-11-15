@@ -15,6 +15,7 @@ import Control.Monad
 import Data.Aeson.Types (FromJSON (parseJSON), genericParseJSON, defaultOptions, fieldLabelModifier)
 import Data.List
 import Data.Ord
+import Data.Int (Int8)
 import GHC.Generics (Generic)
 import Text.Regex (mkRegex, subRegex)
 import qualified Data.Vector.Unboxed as U
@@ -23,9 +24,9 @@ type BoardIndex = (Int, Int)
 
 type BoardOffset = Int
 
-type BoardEntry = Int
+type Modularity = Int8
 
-type Modularity = Int
+type BoardEntry = Modularity
 
 data GameBoard = GameBoard { dimensions :: BoardIndex
                            , boardData :: U.Vector BoardEntry
@@ -122,7 +123,7 @@ applyDelta m b d = b { bDist = bDist b + distDelta
                      , bData = bData'
                      } where f x y     = (x + y) `rem` m
                              bData'    = U.accumulate f (bData b) d
-                             distDelta = U.foldr (\(i,_) z -> (bData' U.! i) - (bData b U.! i) + z) 0 d
+                             distDelta = U.foldr (\(i,_) z -> fromIntegral ((bData' U.! i) - (bData b U.! i)) + z) 0 d
 
 possiblePlans :: Modularity -> GameBoard_ -> GameShape_ -> [(BoardIndex, GameBoard_)]
 possiblePlans m b s = do
@@ -131,10 +132,10 @@ possiblePlans m b s = do
     return (i, b')
 
 mass :: GameShape -> Int
-mass = U.sum . boardData
+mass = U.sum . U.map fromIntegral . boardData
 
 distance :: Modularity -> GameBoard -> Int
-distance m = U.sum . U.map f . boardData
+distance m = U.sum . U.map fromIntegral . U.map f . boardData
     where f x = (m - x) `rem` m
 
 distanceFromMass :: Modularity -> GameBoard_ -> [GameShape_] -> Int
@@ -169,7 +170,7 @@ solve st = do
 
 flipsAndChecksum :: GameState -> (Int, Int)
 flipsAndChecksum st = ( (sum . map mass . shapes) st - distance (modularity st) (board st) )
-                      `quotRem` modularity st
+                      `quotRem` fromIntegral (modularity st)
 
 flips :: GameState -> Int
 flips = fst . flipsAndChecksum
