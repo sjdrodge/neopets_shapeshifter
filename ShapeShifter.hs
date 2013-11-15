@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, TypeSynonymInstances, FlexibleInstances, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
 module ShapeShifter ( GameBoard
                     , GameShape
                     , GameState(..)
@@ -11,36 +11,46 @@ module ShapeShifter ( GameBoard
                     , checksum
                     ) where
 
-import Control.Applicative
 import Control.Monad
-import Data.Aeson ((.=), (.:))
+import Data.Aeson.Types (FromJSON (parseJSON), genericParseJSON, defaultOptions, fieldLabelModifier)
 import Data.List
-import Data.List.Split
 import Data.Ord
-import qualified Data.Aeson as J
-import qualified Data.Vector as V
+import GHC.Generics (Generic)
+import Text.Regex (mkRegex, subRegex)
 import qualified Data.Vector.Unboxed as U
 
-data GameBoard = GameBoard { dimensions :: BoardIndex
-                           , boardData :: V.Vector (U.Vector Int)
-                           }
+type BoardIndex = (Int, Int)
 
-type GameShape = GameBoard
+type BoardOffset = Int
+
+type BoardEntry = Int
 
 type Modularity = Int
+
+data GameBoard = GameBoard { dimensions :: BoardIndex
+                           , boardData :: U.Vector BoardEntry
+                           } deriving (Generic, Show)
+
+type GameShape = GameBoard
 
 data GameState = GameState { modularity :: Modularity
                            , board :: GameBoard
                            , shapes :: [GameShape]
-                           }
+                           } deriving (Generic, Show)
 
 type GamePlan = [(GameShape, BoardIndex)]
 
-newtype BoardIndex = BoardIndex (Int,Int)
-    deriving (Eq, Ord, Show)
+instance FromJSON GameBoard where
+    parseJSON = genericParseJSON defaultOptions
+        { fieldLabelModifier = \str -> subRegex (mkRegex "^boardD") str "d" }
+
+instance FromJSON GameState
+
+rcIndex :: GameBoard -> Int -> Int -> BoardEntry
+rcIndex b r c = boardData b U.! (numCols b * r + c)
 
 ppGameBoard :: GameBoard -> String
-ppGameBoard b = unlines ("":[ unwords [ show ( boardData b V.! i U.! j )
+ppGameBoard b = unlines ("":[ unwords [ show ( rcIndex b i j )
                                 | j <- [0 .. (numCols b - 1)]
                                 ]
                                 | i <- [0 .. (numRows b - 1)]
@@ -48,79 +58,38 @@ ppGameBoard b = unlines ("":[ unwords [ show ( boardData b V.! i U.! j )
 
 ppGamePlan :: GamePlan -> String
 ppGamePlan = unwords . map f
-    where f (sh, BoardIndex (n,m)) = ppGameBoard sh ++ "-\n" ++ show (n + 1, m + 1) ++ "\n"
+    where f (sh, (n,m)) = ppGameBoard sh ++ "-\n" ++ show (n + 1, m + 1) ++ "\n"
 
 ppGameState :: GameState -> String
 ppGameState st = ppGameBoard b ++ "% " ++ show (modularity st)
                                 where b = board st
 
-instance Num BoardIndex where
-    (+) (BoardIndex (a, b)) (BoardIndex (c, d)) = BoardIndex (a+c, b+d)
-    (*) (BoardIndex (a, b)) (BoardIndex (c, d)) = BoardIndex (a*c, b*d)
-    negate (BoardIndex (a, b)) = BoardIndex (-a, -b)
-    abs (BoardIndex (a, b)) = BoardIndex (abs a, abs b)
-    signum (BoardIndex (a, b)) = BoardIndex (signum a, signum b)
-    fromInteger x = BoardIndex (fromIntegral x, fromIntegral x)
-
-instance J.ToJSON BoardIndex where
-    toJSON (BoardIndex (x,y)) = (J.Array . V.fromList . map (J.toJSON . (+1)) ) [x,y]
-
-instance J.ToJSON GameBoard where
-    toJSON b = J.object [ "dimensions" .= (numRows b, numCols b)
-                        , "data" .= (J.Array . V.fromList . concatMap (map J.toJSON) . map U.toList . V.toList) (boardData b)
-                        ]
-
-instance J.FromJSON GameBoard where
-    parseJSON (J.Object b) = GameBoard
-                             <$> ( BoardIndex <$> b .: "dimensions" )
-                             <*> fmap (V.fromList . map U.fromList)
-                                 ( chunksOf
-                                   <$> ( ( (\(BoardIndex(_, y)) -> y + 1) . snd . listToBoardIndexRange ) <$> b .: "dimensions" )
-                                   <*> ( b .: "data" )
-                                 )
-
-instance J.ToJSON GameState where
-    toJSON (GameState { modularity = m, board = b, shapes = shs }) = J.object [ "modularity" .= m
-                                                                              , "board" .= b
-                                                                              , "shapes" .= shs
-                                                                              ]
-
-instance J.FromJSON GameState where
-    parseJSON (J.Object b) = GameState
-                             <$> b .: "modularity"
-                             <*> b .: "board"
-                             <*> ( V.toList <$> b .: "shapes" )
-
-listToBoardIndexRange :: [Int] -> (BoardIndex, BoardIndex)
-listToBoardIndexRange (x:y:[]) = (BoardIndex (0, 0), BoardIndex (x-1, y-1))
-
 numRows :: GameBoard -> Int
-numRows = (\ (BoardIndex (r,_)) -> r) . dimensions
+numRows = fst . dimensions
 
 numCols :: GameBoard -> Int
-numCols = (\ (BoardIndex (_,c)) -> c) . dimensions
+numCols = snd . dimensions
 
 boardSize :: GameBoard -> BoardIndex
-boardSize b = BoardIndex (numRows b, numCols b)
+boardSize b = (numRows b, numCols b)
 
 possibleIndices :: GameBoard -> GameShape -> [BoardIndex]
 possibleIndices b sh = do
     r <- [0 .. (numRows b - numRows sh)]
     c <- [0 .. (numCols b - numCols sh)]
-    return $ BoardIndex (r, c)
+    return (r, c)
 
 applyShape :: Modularity -> GameBoard -> GameShape -> BoardIndex -> GameBoard
-applyShape m b s i = b {boardData = V.fromList . map U.fromList . chunksOf (numCols b) . V.toList $ flatvec}
+applyShape m b s i = b {boardData = U.accum f (boardData b) (shapeIndicesList b s i)}
                          where f x y   = (x + y) `rem` m
-                               flatvec = V.accum f (V.concatMap V.convert $ boardData b) (shapeIndicesList b s i)
 
 
-shapeIndicesList :: GameBoard -> GameShape -> BoardIndex -> [(Int, Int)]
+shapeIndicesList :: GameBoard -> GameShape -> BoardIndex -> [(BoardOffset, BoardEntry)]
 shapeIndicesList b s i = do
     r <- [0 .. (numRows s - 1)]
     c <- [0 .. (numCols s - 1)]
-    let BoardIndex (r0, c0) = i
-    guard (boardData s V.! r U.! c == 1)
+    let (r0, c0) = i
+    guard (rcIndex s r c == 1)
     return ( numCols b * (r0 + r) + (c0 + c), 1 )
 
 possiblePlans :: Modularity -> GameBoard -> GameShape -> [(BoardIndex, GameBoard)]
@@ -130,13 +99,13 @@ possiblePlans m b s = do
     return (i, b')
 
 isSolved :: GameBoard -> Bool
-isSolved = V.all (U.all (0==)) . boardData
+isSolved = U.all (0==) . boardData
 
 mass :: GameShape -> Int
-mass = V.sum . V.map U.sum . boardData
+mass = U.sum . boardData
 
 distance :: Modularity -> GameBoard -> Int
-distance m = V.sum . V.map (U.foldr f 0) . boardData
+distance m = U.foldr f 0 . boardData
     where f x z = ((m - x) `rem` m) + z
 
 distanceFromMass :: Modularity -> GameBoard -> [GameShape] -> Int
@@ -159,8 +128,8 @@ solve :: GameState -> Maybe GamePlan
 solve st = shapeShifter (modularity st) (board st) . sortBy g . sortBy f $ shapes st
     where f x y = comparing mass y x --larger first
           g = comparing (h . boardSize)
-          h (BoardIndex (r, c)) = (rmax - r + 1) * (cmax - c + 1)
-          BoardIndex (rmax, cmax) = boardSize . board $ st
+          h (r, c) = (rmax - r + 1) * (cmax - c + 1)
+          (rmax, cmax) = boardSize . board $ st
 
 flipsAndChecksum :: GameState -> (Int, Int)
 flipsAndChecksum st = ( (sum . map mass . shapes) st - distance (modularity st) (board st) )
