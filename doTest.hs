@@ -26,7 +26,7 @@ showNumShapes :: GameState -> String
 showNumShapes = ("shapes: "++) . show . length . shapes
 
 showPlan :: Maybe GamePlan -> String
-showPlan = maybe "No solution found." ppGamePlan
+showPlan = maybe "No solution found.\n" ppGamePlan
 
 getGameState :: B.ByteString -> Maybe GameState
 getGameState = J.decode
