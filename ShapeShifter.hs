@@ -15,7 +15,6 @@ import Control.Monad
 import Control.Monad.State
 import Data.Aeson.Types (FromJSON (parseJSON), genericParseJSON, defaultOptions, fieldLabelModifier)
 import Data.List
-import Data.Maybe (fromJust)
 import Data.Ord
 import Data.Int (Int8)
 import GHC.Generics (Generic)
@@ -166,13 +165,13 @@ solve' st = shapeShifter (modularity st) (mkGameBoard_ st) . sortBy g . sortBy f
 solve :: GameState -> Maybe GamePlan
 solve st = do
     gameplan <- solve' st
-    let ixs = evalState (mapM shapeToPlanIndex (mkGameShapes_ st)) gameplan
+    ixs <- evalStateT (mapM shapeToPlanIndex (mkGameShapes_ st)) gameplan
     return $ zip (shapes st) ixs
 
-shapeToPlanIndex :: GameShape_ -> State GamePlan_ BoardIndex
+shapeToPlanIndex :: GameShape_ -> StateT GamePlan_ Maybe BoardIndex
 shapeToPlanIndex sh = do
     plan <- get
-    let ix = fromJust (sh `lookup` plan)
+    ix <- lift (sh `lookup` plan)
     put $ delete (sh, ix) plan
     return ix
 
