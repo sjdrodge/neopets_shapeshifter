@@ -152,13 +152,13 @@ shapeShifter' m (s:ss) (i, b) = do
 
 shapeShifter :: Modularity -> GameBoard_ -> [GameShape_] -> Maybe GamePlan_
 shapeShifter _ b ss | null ss = if bDist b == 0 then Just [] else Nothing
-shapeShifter m b (s:ss) = msum . map (shapeShifter' m (s:ss)) . pruneAndSort m ss . possiblePlans m b $ s
+shapeShifter m b (s:ss)       = msum . map (shapeShifter' m (s:ss)) . pruneAndSort m ss . possiblePlans m b $ s
 
 solve' :: GameState -> Maybe GamePlan_
 solve' st = shapeShifter (modularity st) (mkGameBoard_ st) . sortBy g . sortBy f $ mkGameShapes_ st
-    where f x y = comparing sMass y x --larger first
-          g = comparing (h . sDims)
-          h (r, c) = (rmax - r + 1) * (cmax - c + 1)
+    where f x y        = comparing sMass y x --larger first
+          g            = comparing (h . sDims)
+          h (r, c)     = (rmax - r + 1) * (cmax - c + 1)
           (rmax, cmax) = boardSize . board $ st
 
 solve :: GameState -> Maybe GamePlan
