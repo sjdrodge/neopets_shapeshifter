@@ -175,8 +175,8 @@ shapeShifter' m (s:ss) (i, b) = do
     return $!! (s, i) : ret
 
 shapeShifter :: Modularity -> GameBoard_ -> [GameShape_] -> Maybe GamePlan_
-shapeShifter _ b ss | null ss = if bDist b == 0 then Just [] else Nothing
-shapeShifter m b (s:ss)       = msum . map (shapeShifter' m (s:ss)) . pruneAndSort m ss . possiblePlans m b $ s
+shapeShifter _ b []     = if bDist b == 0 then Just [] else Nothing
+shapeShifter m b (s:ss) = msum . map (shapeShifter' m (s:ss)) . pruneAndSort m ss . possiblePlans m b $ s
 
 solve' :: GameState -> Maybe GamePlan_
 solve' st = shapeShifter (modularity st) (mkGameBoard_ st) . sortBy g . sortBy f $ mkGameShapes_ st
