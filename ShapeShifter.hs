@@ -169,17 +169,15 @@ pruneAndSort :: Modularity -> [GameShape_] -> [(BoardIndex, GameBoard_)] -> [(Bo
 pruneAndSort m ss = sortBy (comparing h) . filter ((0 <=) . h)
     where h (_, b) = distanceFromMass m b ss
 
-shapeShifter' :: Modularity -> [GameShape_] -> (BoardIndex, GameBoard_) -> Maybe GamePlan_
-shapeShifter' m (s:ss) (i, b) = do
-    ret <- shapeShifter m b ss
-    return $!! (s, i) : ret
-
-shapeShifter :: Modularity -> GameBoard_ -> [GameShape_] -> Maybe GamePlan_
-shapeShifter _ b []     = if bDist b == 0 then Just [] else Nothing
-shapeShifter m b (s:ss) = msum . map (shapeShifter' m (s:ss)) . pruneAndSort m ss . possiblePlans m b $ s
+search :: Modularity -> GameBoard_ -> [GameShape_] -> Maybe GamePlan_
+search _ b []     = if bDist b == 0 then Just [] else Nothing
+search m b (s:ss) = msum . map f . pruneAndSort m ss . possiblePlans m b $ s
+    where f (i, b') = do
+          plan <- search m b' ss
+          return $ (s, i) : plan
 
 solve' :: GameState -> Maybe GamePlan_
-solve' st = shapeShifter (modularity st) (mkGameBoard_ st) . sortBy g . sortBy f $ mkGameShapes_ st
+solve' st = search (modularity st) (mkGameBoard_ st) . sortBy g . sortBy f $ mkGameShapes_ st
     where f x y        = comparing sMass y x --larger first
           g            = comparing (h . sDims)
           h (r, c)     = (rmax - r + 1) * (cmax - c + 1)
