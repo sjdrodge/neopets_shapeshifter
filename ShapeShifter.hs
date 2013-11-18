@@ -135,9 +135,11 @@ applyDelta m b d = runST $ do
     U.forM_ d $ \i -> do
         x <- UM.read vec' i
         let x' = x + 1
-        unless (x' == m) $ UM.write vec' i x'
-        when (x' == m) $ UM.write vec' i 0
-        when (x' == 1) $ modifySTRef nref (+ 1)
+        UM.write vec' i x'
+        let doUpdate | x' == 1   = modifySTRef nref (+ 1)
+                     | x' == m   = UM.write vec' i 0
+                     | otherwise = return ()
+        doUpdate
 
     n <- readSTRef nref
     modifySTRef dist' (+ (n * fromIntegral m - U.length d))
