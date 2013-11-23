@@ -15,7 +15,7 @@ import Control.DeepSeq (($!!), NFData)
 import Control.Monad
 import Control.Monad.ST
 import Control.Monad.State
-import Data.Aeson.Types (FromJSON (parseJSON), genericParseJSON, defaultOptions, fieldLabelModifier)
+import Data.Aeson.Types
 import Data.Int (Int8)
 import Data.List
 import Data.Ord
@@ -44,7 +44,11 @@ data GameState = GameState { modularity :: Modularity
                            , shapes     :: [GameShape]
                            } deriving (Generic, Show)
 
-type GamePlan = [(GameShape, BoardIndex)]
+data ShapeIndex = ShapeIndex { shape :: GameShape
+                             , index :: BoardIndex
+                             } deriving (Generic, Show)
+
+type GamePlan = [ShapeIndex]
 
 type Delta = U.Vector BoardOffset
 
@@ -64,11 +68,21 @@ type GamePlan_ = [(GameShape_, BoardIndex)]
 instance NFData GameBoard_
 instance NFData GameShape_
 
+gameBoardJSONOptions :: Options
+gameBoardJSONOptions = defaultOptions
+    { fieldLabelModifier = \str -> subRegex (mkRegex "^boardD") str "d" }
+
 instance FromJSON GameBoard where
-    parseJSON = genericParseJSON defaultOptions
-        { fieldLabelModifier = \str -> subRegex (mkRegex "^boardD") str "d" }
+    parseJSON = genericParseJSON gameBoardJSONOptions
+
+instance ToJSON GameBoard where
+    toJSON = genericToJSON gameBoardJSONOptions
 
 instance FromJSON GameState
+instance ToJSON GameState
+
+instance FromJSON ShapeIndex
+instance ToJSON ShapeIndex
 
 mkGameShapes_ :: GameState -> [GameShape_]
 mkGameShapes_ st = map (\ sh -> GameShape_ { sDims   = dimensions sh
@@ -97,7 +111,9 @@ ppGameBoard b = unlines ("" : [ unwords [ show ( rcIndex b i j )
 
 ppGamePlan :: GamePlan -> String
 ppGamePlan = unwords . map f
-    where f (sh, (n, m)) = ppGameBoard sh ++ "-\n" ++ show (n + 1, m + 1) ++ "\n"
+    where f si   = ppGameBoard s ++ "-\n" ++ show (r + 1, c + 1) ++ "\n"
+              where s      = shape si
+                    (r, c) = index si
 
 ppGameState :: GameState -> String
 ppGameState st = ppGameBoard b ++ "% " ++ show (modularity st)
@@ -187,7 +203,7 @@ solve :: GameState -> Maybe GamePlan
 solve st = do
     gameplan <- solve' st
     ixs <- evalStateT (mapM shapeToPlanIndex (mkGameShapes_ st)) gameplan
-    return $ zip (shapes st) ixs
+    return $ zipWith ShapeIndex (shapes st) ixs
 
 shapeToPlanIndex :: GameShape_ -> StateT GamePlan_ Maybe BoardIndex
 shapeToPlanIndex sh = do
