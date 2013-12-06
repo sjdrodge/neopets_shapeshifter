@@ -11,11 +11,13 @@ module ShapeShifter ( GameBoard
                     , checksum
                     ) where
 
+import Control.Arrow (second)
 import Control.DeepSeq (($!!), NFData)
 import Control.Monad
 import Control.Monad.ST
 import Control.Monad.State
 import Data.Aeson.Types
+import Data.Functor
 import Data.Int (Int8)
 import Data.List
 import Data.Ord
@@ -164,12 +166,8 @@ applyDelta m b d = runST $ do
     vec'' <- U.unsafeFreeze vec'
     return $!! b {bData = vec'', bDist = dist''}
 
-
 possiblePlans :: Modularity -> GameBoard_ -> GameShape_ -> [(BoardIndex, GameBoard_)]
-possiblePlans m b s = do
-    (i, d) <- sDeltas s
-    let b' = applyDelta m b d
-    return $!! (i, b')
+possiblePlans m b s = second (applyDelta m b) <$> sDeltas s
 
 mass :: GameShape -> Int
 mass = U.sum . U.map fromIntegral . boardData
@@ -188,9 +186,7 @@ pruneAndSort m ss = sortBy (comparing h) . filter ((0 <=) . h)
 search :: Modularity -> GameBoard_ -> [GameShape_] -> Maybe GamePlan_
 search _ b []     = if bDist b == 0 then Just [] else Nothing
 search m b (s:ss) = msum . map f . pruneAndSort m ss . possiblePlans m b $ s
-    where f (i, b') = do
-          plan <- search m b' ss
-          return $ (s, i) : plan
+    where f (i, b') = ((s, i) :) <$> search m b' ss
 
 solve' :: GameState -> Maybe GamePlan_
 solve' st = search (modularity st) (mkGameBoard_ st) . sortBy g . sortBy f $ mkGameShapes_ st
