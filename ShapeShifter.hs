@@ -127,9 +127,6 @@ numRows = fst . dimensions
 numCols :: GameBoard -> Int
 numCols = snd . dimensions
 
-boardSize :: GameBoard -> BoardIndex
-boardSize b = (numRows b, numCols b)
-
 shapeIndicesList :: GameBoard -> GameShape -> BoardIndex -> [BoardOffset]
 shapeIndicesList b s i = do
     r <- [0 .. (numRows s - 1)]
@@ -188,16 +185,19 @@ search _ b []     = if bDist b == 0 then Just [] else Nothing
 search m b (s:ss) = msum . map f . pruneAndSort m ss . possiblePlans m b $ s
     where f (i, b') = ((s, i) :) <$> search m b' ss
 
-solve' :: GameState -> Maybe GamePlan_
-solve' st = search (modularity st) (mkGameBoard_ st) . sortBy g . sortBy f $ mkGameShapes_ st
-    where f x y        = comparing sMass y x --larger first
-          g            = comparing (h . sDims)
-          h (r, c)     = (rmax - r + 1) * (cmax - c + 1)
-          (rmax, cmax) = boardSize . board $ st
+degreesOfFreedom :: GameBoard_ -> GameShape_ -> Int
+degreesOfFreedom b s = (rmax - r + 1) * (cmax - c + 1)
+    where (r, c) = sDims s
+          (rmax, cmax) = bDims b
+
+sortShapes_ :: GameBoard_ -> [GameShape_] -> [GameShape_]
+sortShapes_ b ss = sortBy (comparing (degreesOfFreedom b)) . sortBy (flip $ comparing sMass) $ ss
 
 solve :: GameState -> Maybe GamePlan
 solve st = do
-    gameplan <- solve' st
+    let board' = mkGameBoard_ st
+    let shapes' = sortShapes_ board' (mkGameShapes_ st)
+    gameplan <- search (modularity st) board' shapes'
     ixs <- evalStateT (mapM shapeToPlanIndex (mkGameShapes_ st)) gameplan
     return $ zipWith ShapeIndex (shapes st) ixs
 
